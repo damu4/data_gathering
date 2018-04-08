@@ -1,4 +1,5 @@
 import os
+import json
 
 from storages.storage import Storage
 
@@ -11,30 +12,23 @@ class FileStorage(Storage):
     def read_data(self):
         if not os.path.exists(self.file_name):
             raise StopIteration
-
         with open(self.file_name) as f:
             for line in f:
-                yield line.strip()
+                yield json.loads(line.strip())
 
     def write_data(self, data_array):
         """
         :param data_array: collection of strings that
         should be written as lines
         """
-        with open(self.file_name, 'w') as f:
+        with open(self.file_name, encoding='utf-8', mode='w') as f:
             for line in data_array:
-                if line.endswith('\n'):
-                    f.write(line)
-                else:
-                    f.write(line + '\n')
+                f.write(json.dumps(line) + '\n')
 
     def append_data(self, data):
         """
         :param data: string
         """
-        with open(self.file_name, 'a') as f:
+        with open(self.file_name, encoding='utf-8', mode='a') as f:
             for line in data:
-                if line.endswith('\n'):
-                    f.write(line)
-                else:
-                    f.write(line + '\n')
+                f.write(json.dumps(line) + '\n')

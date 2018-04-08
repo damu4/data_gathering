@@ -122,18 +122,28 @@ pep8 .
 """
 
 import logging
-
 import sys
 
+import pandas as pd
+
+from parsers.parser import VacancyParser
 from scrappers.scrapper import Scrapper
 from storages.file_storage import FileStorage
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 SCRAPPED_FILE = 'scrapped_data.txt'
 TABLE_FORMAT_FILE = 'data.csv'
+# Number of vacancies we would like to get, int 0 - 2000
+VACANCIES_LIMIT = 2000
+# Number of vacancies per request, int 0 - 100
+VACANCIES_PER_PAGE = 100
+# hh.ru area code from https://api.hh.ru/areas
+VACANCIES_SEARCH_AREA = [1438, 2114]
+# hh.ru specializations from https://api.hh.ru/specializations
+SPECIALIZATION = 22
+COLUMNS = ['name', 'salary_from', 'salary_to', 'days', 'company', 'city']
 
 
 def gather_process():
@@ -141,15 +151,23 @@ def gather_process():
     storage = FileStorage(SCRAPPED_FILE)
 
     # You can also pass a storage
-    scrapper = Scrapper()
+    scrapper = Scrapper(limit=VACANCIES_LIMIT, per_page=VACANCIES_PER_PAGE, area=VACANCIES_SEARCH_AREA,
+                        specialization=SPECIALIZATION)
     scrapper.scrap_process(storage)
 
 
 def convert_data_to_table_format():
     logger.info("transform")
-
+    storage = FileStorage(SCRAPPED_FILE)
+    data = storage.read_data()
+    parser = VacancyParser(COLUMNS)
     # Your code here
     # transform gathered data from txt file to pandas DataFrame and save as csv
+    with open(TABLE_FORMAT_FILE, encoding='utf-8', mode='w') as f:
+        df = pd.DataFrame(columns=COLUMNS)
+        for vacancy in data:
+            df = df.append(pd.DataFrame(parser.parse(vacancy), columns=COLUMNS), ignore_index=True)
+        df.to_csv(f, encoding='utf-8')
     pass
 
 
@@ -160,6 +178,43 @@ def stats_of_data():
     # Load pandas DataFrame and print to stdout different statistics about the data.
     # Try to think about the data and use not only describe and info.
     # Ask yourself what would you like to know about this data (most frequent word, or something else)
+    df = pd.read_csv(TABLE_FORMAT_FILE)
+    # clear vacancies which appear less than
+    counts = df['name'].value_counts()
+    df = df[df['name'].isin(counts[counts > 5].index)]
+    # concatenate min and max offers of salaries
+    df1 = df.rename(columns={'salary_to': 'salary'})
+    df2 = df.rename(columns={'salary_from': 'salary'})
+    df3 = pd.concat([df1[['name', 'salary']].dropna(), df2[['name', 'salary']].dropna()])
+    mean_salary = df3['salary'].mean()
+    top_vacancies = df['name'].value_counts()[:5]
+    top_cities = df['city'].value_counts()[:5]
+    top_salary_vacancies = df3.groupby('name')['salary'].agg(['mean']).sort_values('mean', ascending=False)[:10]
+    top_salary_vacancies = top_salary_vacancies['mean'].map("{:.0f}".format)
+    top_days_vacancies = df.groupby('name')['days'].agg(['max']).sort_values('max', ascending=False)[:5]
+    top_company_vacancies = df['company'].value_counts()[:5]
+
+    print('-- Домашнаяя работа №1. Курс "BigData" от 27.03.2018 --')
+    print('  Исследование вакансий в сфере туризма и сервиса ')
+    print('  в Краснодарском крае и Республике Крым на основе данных hh.ru')
+    print()
+    print('1) Средняя предлагаемая зарплата:')
+    print('%d' % mean_salary)
+    print()
+    print('2) Самые востребованные профессии:')
+    print(top_vacancies)
+    print()
+    print('3) Города нуждающиеся в кадрах:')
+    print(top_cities)
+    print()
+    print('4) Наиболее оплачиваемые профессии:')
+    print(top_salary_vacancies)
+    print()
+    print('5) Вакансии, которые дольше закрываются (в днях):')
+    print(top_days_vacancies)
+    print()
+    print('6) Компании, наиболее активно ищущие кадры:')
+    print(top_company_vacancies)
 
 
 if __name__ == '__main__':
